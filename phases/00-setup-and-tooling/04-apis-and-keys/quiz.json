@@ -23,10 +23,10 @@
     },
     {
       "stage": "post",
-      "question": "In the raw HTTP API call to Anthropic, which header carries the API key?",
-      "options": ["Authorization: Bearer sk-ant-...", "Content-Type: application/json", "anthropic-version: 2023-06-01", "x-api-key: sk-ant-..."],
-      "correct": 3,
-      "explanation": "Anthropic's API uses the 'x-api-key' header for authentication, not the more common 'Authorization: Bearer' pattern. This is specific to their API design."
+      "question": "In the Gemini generateContent request used in this lesson, where is the API key sent?",
+      "options": ["In the prompt text", "In the x-goog-api-key header", "In the model name", "In the response body"],
+      "correct": 1,
+      "explanation": "This lesson sends GEMINI_API_KEY as the x-goog-api-key header. Never put the key in the prompt, source code, or a copied URL."
     },
     {
       "stage": "post",
@@ -34,6 +34,13 @@
       "options": ["Your request is queued and processed later automatically", "The server returns an error (typically HTTP 429) and you must wait before retrying", "Your API key is permanently revoked", "The API silently drops your request with no response"],
       "correct": 1,
       "explanation": "Rate limiting returns HTTP 429 (Too Many Requests). You need to wait and retry, typically with exponential backoff. Rate limits prevent abuse and ensure fair usage."
+    },
+    {
+      "stage": "check",
+      "question": "Where does Gemini put generated text in a successful response?",
+      "options": ["content[0].text", "message.text", "candidates[0].content.parts[0].text", "output.text"],
+      "correct": 2,
+      "explanation": "Gemini returns one or more candidates. The text for the first candidate is nested at candidates[0].content.parts[0].text."
     }
   ]
 }

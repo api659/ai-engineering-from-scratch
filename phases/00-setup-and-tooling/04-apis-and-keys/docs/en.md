@@ -10,8 +10,8 @@
 ## Learning Objectives
 
 - Store API keys securely using environment variables and `.env` files
-- Make an LLM API call using both the Anthropic Python SDK and raw HTTP
-- Compare SDK-based and raw HTTP request/response formats for debugging
+- Make a Gemini API call using raw HTTP from Python and TypeScript
+- Compare request/response handling across two languages for debugging
 - Identify and handle common API errors including authentication and rate limits
 
 ## The Problem
@@ -45,80 +45,74 @@ s0-secret-inject
 Never put API keys in code. Use environment variables.
 
 ```bash
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
+export GEMINI_API_KEY="..."
 ```
 
 Or use a `.env` file (add it to `.gitignore`):
 
 ```
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
+GEMINI_API_KEY=...
+```
+
+In GitHub Actions, a repository secret is not automatically an environment variable. Map it in the job or step that runs this lesson:
+
+```yaml
+env:
+    GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
 ```
 
 ### Step 2: First API call (Python)
 
 ```python
 import os
+import urllib.request
+import json
 
-import anthropic
-
-client = anthropic.Anthropic()
-
-MODEL = os.environ.get("LLM_MODEL", "claude-sonnet-5")
-
-response = client.messages.create(
-    model=MODEL,
-    max_tokens=256,
-    messages=[{"role": "user", "content": "What is a neural network in one sentence?"}]
-)
-
-print(response.content[0].text)
+key = os.environ["GEMINI_API_KEY"]
+model = os.environ.get("LLM_MODEL", "gemini-2.5-flash")
+url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+body = json.dumps({"contents": [{"parts": [{"text": "What is a neural network in one sentence?"}]}]}).encode()
+request = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "x-goog-api-key": key}, method="POST")
+with urllib.request.urlopen(request) as response:
+    result = json.loads(response.read())
+    print(result["candidates"][0]["content"]["parts"][0]["text"])
 ```
 
-`LLM_MODEL` selects the Anthropic model id, and the default is the un-dated Sonnet alias. Other providers (OpenAI, Google, and others) follow the same pattern of a key plus a model id, but each has its own SDK, endpoint, and request/response schema.
+`LLM_MODEL` selects the Gemini model id, and the default `gemini-2.5-flash` is available on Gemini's free tier. The runnable file uses only Python's standard library.
 
 ### Step 3: First API call (TypeScript)
 
 ```typescript
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic();
-
-const MODEL = process.env.LLM_MODEL ?? "claude-sonnet-5";
-
-const response = await client.messages.create({
-  model: MODEL,
-  max_tokens: 256,
-  messages: [{ role: "user", content: "What is a neural network in one sentence?" }],
+const key = process.env.GEMINI_API_KEY;
+const model = process.env.LLM_MODEL ?? "gemini-2.5-flash";
+const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+const response = await fetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-goog-api-key": key ?? "" },
+    body: JSON.stringify({
+        contents: [{ parts: [{ text: "What is a neural network in one sentence?" }] }],
+    }),
 });
 
-console.log(response.content[0].text);
+console.log((await response.json()).candidates[0].content.parts[0].text);
 ```
 
 ### Step 4: Raw HTTP (no SDK)
 
 ```python
+import json
 import os
 import urllib.request
-import json
 
-url = "https://api.anthropic.com/v1/messages"
-headers = {
-    "Content-Type": "application/json",
-    "x-api-key": os.environ["ANTHROPIC_API_KEY"],
-    "anthropic-version": "2023-06-01",
-}
-body = json.dumps({
-    "model": os.environ.get("LLM_MODEL", "claude-sonnet-5"),
-    "max_tokens": 256,
-    "messages": [{"role": "user", "content": "What is a neural network in one sentence?"}],
-}).encode()
+key = os.environ["GEMINI_API_KEY"]
+model = os.environ.get("LLM_MODEL", "gemini-2.5-flash")
+url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+body = json.dumps({"contents": [{"parts": [{"text": "What is a neural network in one sentence?"}]}]}).encode()
 
-req = urllib.request.Request(url, data=body, headers=headers, method="POST")
+req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json", "x-goog-api-key": key}, method="POST")
 with urllib.request.urlopen(req) as resp:
     result = json.loads(resp.read())
-    print(result["content"][0]["text"])
+    print(result["candidates"][0]["content"]["parts"][0]["text"])
 ```
 
 This is what the SDKs do under the hood. Understanding the raw HTTP call helps when debugging.
@@ -129,8 +123,8 @@ For this course:
 
 | API | When you need it | Free tier |
 |-----|-----------------|-----------|
-| Anthropic (Claude) | Phases 11-16 (agents, tools) | $5 credit on signup |
-| OpenAI | Phase 11 (comparison) | $5 credit on signup |
+| Google Gemini | This lesson and later model comparisons | `gemini-2.5-flash` has a free tier |
+| Anthropic (Claude) | Phases 11-16 (agents, tools) | Credit-based |
 | Hugging Face | Phases 4-10 (models, datasets) | Free |
 
 You don't need all of them right now. Set them up when the lesson requires it.
@@ -142,8 +136,8 @@ This lesson produces:
 
 ## Exercises
 
-1. Get an Anthropic API key and make your first API call
-2. Try the raw HTTP version and compare the response format to the SDK version
+1. Create a Gemini API key and make your first API call
+2. Run both language versions and compare their request and response handling
 3. Intentionally use a wrong API key and read the error message
 
 ## Key Terms

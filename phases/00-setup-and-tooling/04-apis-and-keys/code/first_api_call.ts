@@ -1,7 +1,7 @@
 // Phase 0 · Lesson 04 — APIs and keys (TypeScript port).
-// Reads ANTHROPIC_API_KEY from env, parses a minimal .env file, then makes one
-// /v1/messages call with global fetch. Set MOCK=1 to skip the network entirely.
-// Refs: https://docs.anthropic.com/en/api/messages
+// Reads GEMINI_API_KEY from env, parses a minimal .env file, then makes one
+// generateContent call with global fetch. Set MOCK=1 to skip the network entirely.
+// Refs: https://ai.google.dev/api/generate-content
 //       https://nodejs.org/api/process.html#processenv
 //       https://nodejs.org/api/globals.html#fetch (Node 18+ ships fetch)
 
@@ -10,15 +10,14 @@ import { resolve } from "node:path";
 import process from "node:process";
 
 
-type MessagesRequest = {
-  model: string;
-  max_tokens: number;
-  messages: { role: "user" | "assistant"; content: string }[];
+type GeminiRequest = {
+  contents: { parts: { text: string }[] }[];
+  generationConfig: { maxOutputTokens: number };
 };
 
-type MessagesResponse = {
-  content: { type: string; text: string }[];
-  usage: { input_tokens: number; output_tokens: number };
+type GeminiResponse = {
+  candidates: { content: { parts: { text: string }[] } }[];
+  usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number };
 };
 
 // .env loader. Same shape every framework follows; we skip a dep to stay
@@ -55,65 +54,72 @@ function mergeEnv(): NodeJS.ProcessEnv {
   return { ...fromFile, ...process.env };
 }
 
-// Fixture matches the real /v1/messages response shape, so the surrounding
+// Fixture matches the real generateContent response shape, so the surrounding
 // code is identical whether MOCK=1 or not.
-const MOCK_RESPONSE: MessagesResponse = {
-  content: [
+const MOCK_RESPONSE: GeminiResponse = {
+  candidates: [
     {
-      type: "text",
-      text: "A neural network is a stack of differentiable functions that learns patterns by adjusting weights against a loss signal.",
+      content: {
+        parts: [{ text: "A neural network learns patterns by adjusting connected weights." }],
+      },
     },
   ],
-  usage: { input_tokens: 12, output_tokens: 28 },
+  usageMetadata: { promptTokenCount: 12, candidatesTokenCount: 12 },
 };
 
-async function callMessages(apiKey: string, request: MessagesRequest): Promise<MessagesResponse> {
+async function callGemini(
+  apiKey: string,
+  model: string,
+  request: GeminiRequest,
+): Promise<GeminiResponse> {
   if (process.env.MOCK === "1" || apiKey === "mock") {
     return MOCK_RESPONSE;
   }
 
-  const resp = await fetch("https://api.anthropic.com/v1/messages", {
+  const url = new URL(
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+  );
+  const resp = await fetch(url, {
     method: "POST",
     headers: {
       "content-type": "application/json",
-      "x-api-key": apiKey,
-      "anthropic-version": "2023-06-01",
+      "x-goog-api-key": apiKey,
     },
     body: JSON.stringify(request),
   });
 
   if (!resp.ok) {
     const body = await resp.text();
-    throw new Error(`anthropic ${resp.status}: ${body.slice(0, 200)}`);
+    throw new Error(`gemini ${resp.status}: ${body.slice(0, 200)}`);
   }
-  return (await resp.json()) as MessagesResponse;
+  return (await resp.json()) as GeminiResponse;
 }
 
 async function main(): Promise<number> {
   const env = mergeEnv();
-  const model = (env.LLM_MODEL ?? "").trim() || "claude-sonnet-5";
-  const apiKey = env.ANTHROPIC_API_KEY ?? "mock";
+  const model = (env.LLM_MODEL ?? "").trim() || "gemini-2.5-flash";
+  const apiKey = env.GEMINI_API_KEY ?? "mock";
   const usingMock = process.env.MOCK === "1" || apiKey === "mock";
 
   process.stdout.write("=== API Calls ===\n\n");
   process.stdout.write(
     usingMock
-      ? "Mode: MOCK (no network). Unset MOCK and export ANTHROPIC_API_KEY for a live call.\n\n"
+      ? "Mode: MOCK (no network). Unset MOCK and export GEMINI_API_KEY for a live call.\n\n"
       : "Mode: LIVE.\n\n",
   );
 
-  const request: MessagesRequest = {
-    model,
-    max_tokens: 256,
-    messages: [{ role: "user", content: "What is a neural network in one sentence?" }],
+  const request: GeminiRequest = {
+    contents: [{ parts: [{ text: "What is a neural network in one sentence?" }] }],
+    generationConfig: { maxOutputTokens: 256 },
   };
 
   try {
-    const response = await callMessages(apiKey, request);
-    const text = response.content[0]?.text ?? "";
+    const response = await callGemini(apiKey, model, request);
+    const text = response.candidates[0]?.content.parts[0]?.text ?? "";
+    const usage = response.usageMetadata ?? {};
     process.stdout.write(`response: ${text}\n`);
     process.stdout.write(
-      `tokens: ${response.usage.input_tokens} in, ${response.usage.output_tokens} out\n`,
+      `tokens: ${usage.promptTokenCount ?? "?"} in, ${usage.candidatesTokenCount ?? "?"} out\n`,
     );
     return 0;
   } catch (err) {

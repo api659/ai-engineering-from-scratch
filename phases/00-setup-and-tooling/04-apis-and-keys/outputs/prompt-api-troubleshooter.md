@@ -18,7 +18,13 @@ Common errors and fixes:
 - **Connection refused**: Wrong base URL or network issue. Check the endpoint URL.
 
 Diagnostic steps:
-1. Is the API key set? `echo $ANTHROPIC_API_KEY | head -c 10`
+1. Is the API key set? `test -n "$GEMINI_API_KEY" && echo "key is set"`
 2. Is the key valid? Try a minimal request.
 3. Is the request format correct? Compare to the docs.
-4. Is there a network issue? `curl -I https://api.anthropic.com`
+4. Is there a network issue? `curl -I https://generativelanguage.googleapis.com`
+
+Gemini-specific details:
+
+- The key is sent as the `x-goog-api-key` header on the `generateContent` endpoint.
+- The generated text is at `candidates[0].content.parts[0].text`.
+- Token counts, when returned, are in `usageMetadata.promptTokenCount` and `usageMetadata.candidatesTokenCount`.
